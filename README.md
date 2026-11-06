@@ -1,5 +1,13 @@
 # nodejs-download-upload-server
-Node.JS simple server to upload and download files
+Node.JS simple server to upload and download files on your local network.
+
+Features:
+- Upload multiple files or a whole folder at once (button or drag and drop), with per-file and overall progress
+- Folder structure is kept on the server; file names with spaces, unicode and special characters are preserved
+- Responsive UI that works on phones, with light and dark themes
+- Files are stored in the `download` folder; on startup the server prints its LAN address so other devices can connect
+
+Note: folder picking depends on browser support and is hidden where unavailable (most mobile browsers). Empty folders are not uploaded. Uploading a file with an existing name replaces it.
 
 ## 1. Running in terminal
 
@@ -30,7 +38,7 @@ e.g http://localhost:3000
 ### 2.1 Build docker image
 
 ```
-docker build -t fileserver:1.1 .
+docker build -t fileserver:2.0 .
 ```
 
 ### 2.2 Run by docker container
@@ -38,7 +46,7 @@ docker build -t fileserver:1.1 .
 Execute command in terminal:
 
 ```
-docker run  -d -v $PWD/file-server:/app/download -p 3000:3000 --restart=always fileserver:1.1
+docker run  -d -v $PWD/file-server:/app/download -p 3000:3000 --restart=always fileserver:2.0
 ```
 
 or

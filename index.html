@@ -1,143 +1,352 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<title>Simple upload and download file server</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>File Share</title>
 <style>
-body{
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-content: center;
-  align-items: center;
-}
-#toast {
-    visibility: hidden;
-    background-color: black;
-    min-width: 250px;
-    margin-left: -125px;
-    color: #fff;
+  :root {
+    --bg: #f3f8f4;
+    --card: #ffffff;
+    --text: #1f2a24;
+    --muted: #6b7a71;
+    --border: #dfeae3;
+    --accent: #9ed9b4;      /* pastel fill: buttons, bars */
+    --accent-ink: #2f7a4f;  /* readable green for icons and outlines */
+    --accent-soft: #e6f5ec;
+    --on-accent: #173a26;
+    --success: #9ed9b4;
+    --error: #e88f8f;
+    --error-ink: #b54848;
+    --track: #e8f0eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121614;
+      --card: #1a201c;
+      --text: #e6efe9;
+      --muted: #9aaba1;
+      --border: #28322c;
+      --accent: #a8e2bf;
+      --accent-ink: #a8e2bf;
+      --accent-soft: #1e2d24;
+      --on-accent: #133021;
+      --success: #a8e2bf;
+      --error: #f2a7a7;
+      --error-ink: #f2a7a7;
+      --track: #26302a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+  header { margin-bottom: 24px; }
+  h1 { font-size: 24px; font-weight: 650; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h2 { font-size: 15px; font-weight: 600; margin: 0; }
+  .sub { color: var(--muted); margin: 0; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .drop {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 32px 16px;
     text-align: center;
-    border-radius: 2px;
-    padding: 16px;
-    position: fixed;
-    z-index: 1;
-    left: 50%;
-    bottom: 30px;
-}
-.toast-visible-error{
-  visibility: visible !important;
-  animation: fadein 0.5s, fadeout 0.5s 2.5s;
-  background-color: red !important;
-}
-.toast-visible-success{
-  visibility: visible !important;
-  animation: fadein 0.5s, fadeout 0.5s 2.5s;
-  background-color: green !important;
-}
+    transition: border-color .15s, background .15s;
+  }
+  .drop.over { border-color: var(--accent-ink); background: var(--accent-soft); }
+  .drop svg { width: 40px; height: 40px; color: var(--accent-ink); }
+  .drop p { margin: 8px 0 16px; color: var(--muted); }
+  .actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 44px; padding: 0 18px;
+    border-radius: 10px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text);
+    font: inherit; font-weight: 550; cursor: pointer; white-space: nowrap;
+    transition: transform .1s, background .15s;
+  }
+  .btn:active { transform: scale(.98); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .btn:focus-visible, .icon-btn:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+  input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
-@keyframes fadein {
-    from {bottom: 0; opacity: 0;}
-    to {bottom: 30px; opacity: 1;}
-}
-@keyframes fadeout {
-    from {bottom: 30px; opacity: 1;}
-    to {bottom: 0; opacity: 0;}
-}
-.btn{
-    display: inline-block;
-    min-width: 88px;
-    height: 36px;
-    line-height: 36px;
-    border: none;
-    border-radius: 5px;
-    background-color: orange;
-    text-align: center;
-    text-decoration: none;
-    text-transform: uppercase;
-    padding: 0 10px;
-    color: white;
-    cursor: pointer;
-    transition: opacity 0.25s ease-in-out;
-}
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+  .count { color: var(--muted); font-size: 13px; }
+  .bar { height: 6px; background: var(--track); border-radius: 99px; overflow: hidden; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); border-radius: 99px; transition: width .15s; }
+  .bar.done > div { background: var(--success); }
+  .bar.failed > div { background: var(--error); width: 100%; }
 
-.btn-raised{
-   box-shadow: var(--bs1); 
-}
+  ul { list-style: none; margin: 0; padding: 0; }
+  .queue li { padding: 10px 0; border-top: 1px solid var(--border); }
+  .queue li:first-child { border-top: 0; }
+  .row { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .grow { flex: 1; min-width: 0; }
+  .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .name .dir { color: var(--muted); }
+  .meta { color: var(--muted); font-size: 13px; white-space: nowrap; }
+  .queue .bar { margin-top: 6px; }
+  .status-error { color: var(--error-ink); }
 
-.hidden{
-  display: none;
-}
+  .files li { border-top: 1px solid var(--border); }
+  .files li:first-child { border-top: 0; }
+  .files a {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 8px; margin: 0 -8px; border-radius: 10px;
+    color: inherit; text-decoration: none;
+  }
+  .files a:hover { background: var(--accent-soft); }
+  .file-icon {
+    flex: none; width: 40px; height: 40px; border-radius: 10px;
+    display: grid; place-items: center;
+    background: var(--accent-soft); color: var(--accent-ink);
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+  }
+  .dl { flex: none; width: 20px; height: 20px; color: var(--muted); }
+  .empty { color: var(--muted); text-align: center; padding: 24px 0; margin: 0; }
+  .hidden { display: none; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px);
+    max-width: calc(100% - 32px);
+    background: var(--text); color: var(--bg);
+    padding: 12px 18px; border-radius: 10px;
+    opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s;
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @media (max-width: 520px) {
+    main { padding-top: 20px; }
+    .card { padding: 16px; border-radius: 14px; }
+    .drop { padding: 24px 12px; }
+    .actions .btn { flex: 1; }
+    .files .meta-date { display: none; }
+  }
 </style>
-
 </head>
 
 <body>
-  <h3> Simple upload and download file server</h3>
-  <!-- <button onClick="uploadFile" class="btn btn-raised">Upload</button> -->
-  <label for="upload" class="btn btn-raised">Upload</label>
-  <input class="hidden" id="upload" type="file" onchange="uploadFile(event)" />
-  <ol id="download"></ol>
-  <div id="toast"></div>
-  <script>
-      var downloadDOM = document.getElementById('download');
-      var toastDOM = document.getElementById('toast');
-      showUploadedFiles();
+<main>
+  <header>
+    <h1>File Share</h1>
+    <p class="sub">Send and receive files on your local network.</p>
+  </header>
 
-      function uploadFile(event){
-        console.log('inside uploadFile')
-        let target = event.target || event.srcElement || event.currentTarget;
-        let file = target.files[0];
-        let xhr = new XMLHttpRequest();
-        xhr.open('POST', '/upload/'+file.name, true);
-        xhr.setRequestHeader('Content-Type', 'application/octate-stream');
-        xhr.onreadystatechange = function(){
-          event = null;
-          if(xhr.readyState === 4) {
-            if(xhr.status === 200){
-              showToastMessage(xhr.responseText, 'success');
-              showUploadedFiles();
-            }else{
-              showToastMessage(xhr.responseText, 'error');
-            }
-          }
-        }
-        xhr.send(file);
-        event.target.value = "";
-      }
-      
-      function showUploadedFiles(){
-        let xhr = new XMLHttpRequest();
-        xhr.open('GET', '/list', true);
-        xhr.onreadystatechange = function(){
-          if(xhr.readyState === 4){
-            if(xhr.status === 200){
-              let listOfFile = JSON.parse(xhr.responseText);
-              let listOfFileHTML = ""
-              for(var i=0; i<listOfFile.length; i++){
-                listOfFileHTML = listOfFileHTML + "<li> <a href='/download/" + listOfFile[i] +"'>" + listOfFile[i] + "</a></li>"
-              }
-              downloadDOM.innerHTML = listOfFileHTML;
-            }else{
-      
-            }
-          }
-        }
-        xhr.send();
-      }
+  <section class="card">
+    <div class="drop" id="drop">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>
+      </svg>
+      <p>Drag and drop files or folders here</p>
+      <div class="actions">
+        <label class="btn primary" for="pick-files" tabindex="0">Choose files</label>
+        <label class="btn" for="pick-folder" tabindex="0" id="folder-btn">Choose folder</label>
+      </div>
+      <input id="pick-files" type="file" multiple>
+      <input id="pick-folder" type="file" webkitdirectory multiple>
+    </div>
+  </section>
 
-      function showToastMessage(msg, type){
-        console.log('inside showtoast mesage', msg, type)
-        toastDOM.innerText = msg;
-        if(type === 'error'){
-          toastDOM.classList.add('toast-visible-error');
-          setTimeout(function() {toastDOM.classList.remove('toast-visible-error')}, 3000);
-        }else{
-          console.log('toastdom', toastDOM)
-          toastDOM.classList.add('toast-visible-success');        
-          setTimeout(function() {toastDOM.classList.remove('toast-visible-success')}, 3000);
-        }
+  <section class="card hidden" id="queue-card">
+    <div class="section-head">
+      <h2 id="queue-title">Uploading</h2>
+      <span class="count" id="queue-count"></span>
+    </div>
+    <div class="bar" id="total-bar"><div></div></div>
+    <ul class="queue" id="queue" style="margin-top:12px"></ul>
+  </section>
+
+  <section class="card">
+    <div class="section-head">
+      <h2>Files</h2>
+      <span class="count" id="file-count"></span>
+    </div>
+    <ul class="files" id="files"></ul>
+  </section>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const queue = [];        // { file, path, li, bar, meta, loaded, done }
+  let uploading = false;
+
+  // Folder picking is not supported on most mobile browsers.
+  if (!('webkitdirectory' in document.createElement('input'))) $('folder-btn').classList.add('hidden');
+
+  for (const label of document.querySelectorAll('label.btn')) {
+    label.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); label.click(); }
+    });
+  }
+
+  for (const id of ['pick-files', 'pick-folder']) {
+    $(id).addEventListener('change', (e) => {
+      addFiles([...e.target.files].map((f) => ({ file: f, path: f.webkitRelativePath || f.name })));
+      e.target.value = '';
+    });
+  }
+
+  const drop = $('drop');
+  ['dragenter', 'dragover'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', async (e) => {
+    // Entries must be read synchronously; the DataTransfer is cleared once the handler yields.
+    const entries = [...e.dataTransfer.items].map((i) => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+    if (!entries.length) return addFiles([...e.dataTransfer.files].map((f) => ({ file: f, path: f.name })));
+    const items = [];
+    for (const entry of entries) await walkEntry(entry, items);
+    addFiles(items);
+  });
+
+  async function walkEntry(entry, out) {
+    if (entry.isFile) {
+      const file = await new Promise((ok, fail) => entry.file(ok, fail));
+      out.push({ file, path: entry.fullPath.replace(/^\//, '') });
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      let batch;
+      // readEntries returns results in batches; keep reading until empty.
+      while ((batch = await new Promise((ok, fail) => reader.readEntries(ok, fail))).length) {
+        for (const child of batch) await walkEntry(child, out);
       }
-  </script>
+    }
+  }
+
+  function addFiles(items) {
+    if (!items.length) return;
+    if (!uploading) { queue.length = 0; $('queue').textContent = ''; }
+    for (const item of items) {
+      const li = document.createElement('li');
+      li.innerHTML = '<div class="row"><div class="grow name"></div><span class="meta"></span></div><div class="bar"><div></div></div>';
+      li.querySelector('.name').textContent = item.path;
+      $('queue').appendChild(li);
+      queue.push({ ...item, li, bar: li.querySelector('.bar'), meta: li.querySelector('.meta'), loaded: 0, done: false });
+    }
+    $('queue-card').classList.remove('hidden');
+    renderTotal();
+    if (!uploading) runQueue();
+  }
+
+  async function runQueue() {
+    uploading = true;
+    let failed = 0;
+    for (let i = 0; i < queue.length; i++) {
+      const ok = await upload(queue[i]);
+      if (!ok) failed++;
+      loadFiles();
+    }
+    uploading = false;
+    renderTotal();
+    toast(failed ? failed + ' of ' + queue.length + ' uploads failed' : 'All files uploaded');
+  }
+
+  function upload(item) {
+    return new Promise((resolve) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/upload/' + encodeURIComponent(item.path));
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+      xhr.upload.onprogress = (e) => {
+        item.loaded = e.loaded;
+        const pct = item.file.size ? Math.round((e.loaded / item.file.size) * 100) : 100;
+        item.bar.firstChild.style.width = pct + '%';
+        item.meta.textContent = pct + '%';
+        renderTotal();
+      };
+      const finish = (ok, message) => {
+        item.done = true;
+        item.loaded = item.file.size;
+        item.bar.classList.add(ok ? 'done' : 'failed');
+        item.bar.firstChild.style.width = '100%';
+        item.meta.textContent = ok ? formatSize(item.file.size) : message;
+        item.meta.classList.toggle('status-error', !ok);
+        renderTotal();
+        resolve(ok);
+      };
+      xhr.onload = () => finish(xhr.status === 200, xhr.responseText || 'Failed');
+      xhr.onerror = () => finish(false, 'Network error');
+      xhr.send(item.file);
+    });
+  }
+
+  function renderTotal() {
+    const total = queue.reduce((s, q) => s + q.file.size, 0);
+    const loaded = queue.reduce((s, q) => s + q.loaded, 0);
+    const done = queue.filter((q) => q.done).length;
+    const pct = total ? Math.round((loaded / total) * 100) : (done === queue.length ? 100 : 0);
+    $('total-bar').firstChild.style.width = pct + '%';
+    $('total-bar').classList.toggle('done', !uploading && done === queue.length);
+    $('queue-title').textContent = uploading ? 'Uploading… ' + pct + '%' : 'Upload complete';
+    $('queue-count').textContent = done + ' / ' + queue.length + ' files';
+  }
+
+  async function loadFiles() {
+    let files;
+    try {
+      const res = await fetch('/list');
+      if (!res.ok) throw new Error(await res.text());
+      files = await res.json();
+    } catch (err) {
+      return toast('Could not load files');
+    }
+    const list = $('files');
+    list.textContent = '';
+    $('file-count').textContent = files.length ? files.length + (files.length === 1 ? ' file' : ' files') : '';
+    if (!files.length) {
+      list.innerHTML = '<li><p class="empty">No files yet. Upload something to get started.</p></li>';
+      return;
+    }
+    for (const f of files) {
+      const slash = f.path.lastIndexOf('/');
+      const base = f.path.slice(slash + 1);
+      const ext = base.includes('.') ? base.split('.').pop().slice(0, 4) : 'file';
+      const li = document.createElement('li');
+      li.innerHTML =
+        '<a download>' +
+          '<span class="file-icon"></span>' +
+          '<div class="grow"><div class="name"><span class="dir"></span><span class="base"></span></div>' +
+          '<div class="meta"><span class="size"></span><span class="meta-date"></span></div></div>' +
+          '<svg class="dl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12m0 0l-4-4m4 4l4-4"/><path d="M4 18v1a1 1 0 001 1h14a1 1 0 001-1v-1"/></svg>' +
+        '</a>';
+      const a = li.firstChild;
+      a.href = '/download/' + encodeURIComponent(f.path);
+      a.setAttribute('aria-label', 'Download ' + f.path);
+      a.querySelector('.file-icon').textContent = ext;
+      a.querySelector('.dir').textContent = slash >= 0 ? f.path.slice(0, slash + 1) : '';
+      a.querySelector('.base').textContent = base;
+      a.querySelector('.size').textContent = formatSize(f.size);
+      a.querySelector('.meta-date').textContent = ' · ' + new Date(f.mtime).toLocaleString();
+      list.appendChild(li);
+    }
+  }
+
+  function formatSize(bytes) {
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let i = 0;
+    while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; i++; }
+    return (i ? bytes.toFixed(1) : bytes) + ' ' + units[i];
+  }
+
+  let toastTimer;
+  function toast(msg) {
+    $('toast').textContent = msg;
+    $('toast').classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => $('toast').classList.remove('show'), 3000);
+  }
+
+  loadFiles();
+</script>
 </body>
 </html>
-
